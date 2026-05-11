@@ -89,32 +89,38 @@ jobs:
           echo "Next Build Number: $NEXT"
       - name: Generate Changelog
         id: changelog
+        shell: bash
         working-directory: upstream
         run: |
+          set -e
+          
           OLD_SHA="${{ steps.previous.outputs.last_sha }}"
           NEW_SHA="${{ steps.upstream.outputs.sha }}"
 
-          if [ -z "$OLD_SHA" ]; then
+          if [[ -z "$OLD_SHA" ]]; then
             echo "First build!"
 
             TOTAL=$(git rev-list --count HEAD)
 
             LOG=$(git log \
-              --max-count=$MAX_COMMITS \
-              --pretty=format:"- [`%h`]($UPSTREAM_REPO/commit/%H) %s - %an")
+              -n $MAX_COMMITS \
+              --pretty=format:'- [`%h`]($UPSTREAM_REPO/commit/%H) %s - %an')
           else
             TOTAL=$(git rev-list --count "${OLD_SHA}..${NEW_SHA}")
             
             LOG=$(git log \
               "${OLD_SHA}..${NEW_SHA}" \
-              --max-count=$MAX_COMMITS \
-              --pretty=format:"- [`%h`]($UPSTREAM_REPO/commit/%H) %s - %an")
+              -n $MAX_COMMITS \
+              --pretty=format:'- [`%h`]($UPSTREAM_REPO/commit/%H) %s - %an')
           fi
 
-          if [ "$TOTAL" -gt "$MAX_COMMITS" ]; then
+          if [[ "$TOTAL" -gt "$MAX_COMMITS" ]]; then
             OMITTED=$((TOTAL - MAX_COMMITS))
             LOG="${LOG}"$'\n'"- ...and ${OMITTED} more."
           fi
+
+          echo "Generated Changelog:"
+          echo "$LOG"
 
           {
             echo 'log<<EOF'
