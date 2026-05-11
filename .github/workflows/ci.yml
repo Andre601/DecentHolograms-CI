@@ -141,5 +141,5 @@ jobs:
 
           gh release create "${{ steps.version.outputs.next }}" \
             "${{ steps.artifact.outputs.file }}" \
-            --title "Build ${{ steps.version.outputs.next }}" \n
+            --title "Build ${{ steps.version.outputs.next }}" \
             --notes-file release_notes.txt
