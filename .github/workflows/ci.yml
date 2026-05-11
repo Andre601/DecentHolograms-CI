@@ -63,16 +63,22 @@ jobs:
       - name: Find build artifacts
         id: artifact
         run: |
-          FILE=$(find upstream/plugin/build/libs -maxdepth 1 -type f \( -name "*.jar" -o -name "*.war" \) | head -n 1)
+          FILE=$(find upstream/plugin/build/libs \
+            -maxdepth 1 \
+            -type f \n
+            \( -name "*.jar" -o -name "*.war" \) \
+            ! -name "*-sources.jar" \
+            ! -name "*-javadoc.jar" \
+            | head -n 1)
 
           if [ -z "$FILE" ]; then
-            echo "No build artifacts found!"
+            echo "No Build artifact found!"
             exit 1
           fi
 
           echo "file=$FILE" >> $GITHUB_OUTPUT
 
-          echo "Artifact: $FILE"
+          echo "Build Artifact: $FILE"
       - name: Determine next build number
         id: version
         run: |
