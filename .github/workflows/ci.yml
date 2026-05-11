@@ -104,14 +104,14 @@ jobs:
 
             LOG=$(git log \
               -n "$MAX_COMMITS" \
-              --pretty=format:'- [`%h`](${UPSTREAM_REPO}/commit/%H) %s - %an')
+              --pretty=format:'- [\`%h\`](${UPSTREAM_REPO}/commit/%H) %s - %an')
           else
             TOTAL=$(git rev-list --count "${OLD_SHA}..${NEW_SHA}")
             
             LOG=$(git log \
               "${OLD_SHA}..${NEW_SHA}" \
               -n "$MAX_COMMITS" \
-              --pretty=format:'- [`%h`](${UPSTREAM_REPO}/commit/%H) %s - %an')
+              --pretty=format:'- [\`%h\`](${UPSTREAM_REPO}/commit/%H) %s - %an')
           fi
 
           if [[ "$TOTAL" -gt "$MAX_COMMITS" ]]; then
