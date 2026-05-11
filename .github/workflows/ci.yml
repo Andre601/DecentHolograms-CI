@@ -123,9 +123,9 @@ jobs:
           echo "$LOG"
 
           {
-            echo 'log<<EOF'
+            echo "log<<EOF"
             echo "$LOG"
-            echo EOF
+            echo "EOF"
           } >> "$GITHUB_COUTPUT"
       - name: Create release
         env:
