@@ -42,25 +42,33 @@ jobs:
 
           echo "Last Build SHA: $LAST_SHA"
       - name: Stop if nothing changed
+        id: check
         run: |
-          if [ "${{ steps.upstream.outputs.sha }}" = "${{ steps.previous.outputs.last_sha }}" ]; then
+          if [[ "${{ steps.upstream.outputs.sha }}" = "${{ steps.previous.outputs.last_sha }}" ]]; then
             echo "No upstream changes found."
-            exit 0
+            echo "continue=false" >> $GITHUB_OUTPUT
+          else
+            echo "continue=true" >> $GITHUB_OUTPUT
           fi
       - name: Clone upstream repository
+        if: steps.check.outputs.continue == 'true'
         run: git clone --branch "$BRANCH" "$UPSTREAM_REPO" upstream
       - name: Setup Java
+        if: steps.check.outputs.continue == 'true'
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: 21
       - name: Make Gradle exectuable
+        if: steps.check.outputs.continue == 'true'
         working-directory: upstream
         run: chmod +x gradlew
       - name: Build Jar
+        if: steps.check.outputs.continue == 'true'
         working-directory: upstream
         run: ./gradlew shadowJar -x test
       - name: Find build artifacts
+        if: steps.check.outputs.continue == 'true'
         id: artifact
         run: |
           FILE=$(find upstream/plugin/build/libs \
@@ -80,6 +88,7 @@ jobs:
 
           echo "Build Artifact: $FILE"
       - name: Determine next build number
+        if: steps.check.outputs.continue == 'true'
         id: version
         run: |
           LAST=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "")
@@ -94,6 +103,7 @@ jobs:
 
           echo "Next Build Number: $NEXT"
       - name: Generate Changelog
+        if: steps.check.outputs.continue == 'true'
         id: changelog
         shell: bash
         working-directory: upstream
@@ -130,6 +140,7 @@ jobs:
 
           printf 'logs<<EOF\n%s\nEOF\n' "$LOG" >> $GITHUB_OUTPUT
       - name: Create release
+        if: steps.check.outputs.continue == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
