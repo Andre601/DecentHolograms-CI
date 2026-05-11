@@ -1,0 +1,143 @@
+name: "CI Build"
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  UPSTREAM_REPO: https://github.com/DecentSoftware-eu/DecentHolograms
+  BRANCH: main
+  MAX_COMMITS: 10
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout CI Repo
+        uses: actions/checkout@v6
+      - name: Check for GitHub CLI
+        run: gh --version
+      - name: Get latest Upstream commit SHA
+        id: upstream
+        run: |
+          SHA=$(git ls-remote "$UPSTREAM_REPO" "refs/heads/$BRANCH" | cut -f1)
+
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+
+          echo "Latest Upstream SHA: $SHA"
+      - name: Get latest SHA from latest CI release
+        id: previous
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BODY=$(gh release view --json body -q .body 2>/dev/null || true)
+
+          LAST_SHA=$(echo "$BODY" | grep '^UPSTREAM_SHA=' | cut -d= -f2)
+
+          echo "last_sha=$LAST_SHA" >> $GITHUB_OUTPUT
+
+          echo "Last Build SHA: $LAST_SHA"
+      - name: Stop if nothing changed
+        run: |
+          if [ "${{ steps.upstream.outputs.sha }}" = "${{ steps.previous.outputs.last_sha }}" ]; then
+            echo "No upstream changes found."
+            exit 0
+          fi
+      - name: Clone upstream repository
+        run: git clone --branch "$BRANCH" "$UPSTREAM_REPO" upstream
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: 21
+      - name: Make Gradle exectuable
+        working-directory: upstream
+        run: chmod +x gradlew
+      - name: Build Jar
+        working-directory: upstream
+        run: ./gradlew build -x test
+      - name: Find build artifacts
+        id: artifact
+        run: |
+          FILE=$(find upstream/build/libs -maxdepth 1 -type f \( -name "*.jar" -o -name "*.war" \) | head -n 1)
+
+          if [ -z "$FILE" ]; then
+            echo "No build artifacts found!"
+            exit 1
+          fi
+
+          echo "file=$FILE" >> $GITHUB_OUTPUT
+
+          echo "Artifact: $FILE"
+      - name: Determine next build number
+        id: version
+        run: |
+          LAST=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "")
+
+          if [[ -z "$LAST" ]]; then
+            NEXT=1
+          else
+            NEXT=$((LAST + 1))
+          fi
+
+          echo "next=$NEXT" >> $GITHUB_OUTPUT
+
+          echo "Next Build Number: $NEXT"
+      - name: Generate Changelog
+        id: changelog
+        working-directory: upstream
+        run: |
+          OLD_SHA="${{ steps.previous.outputs.last_sha }}"
+          NEW_SHA="${{ steps.upstream.outputs.sha }}"
+
+          if [ -z "$OLD_SHA" ]; then
+            echo "First build!"
+
+            TOTAL=$(git rev-list --count HEAD)
+
+            LOG=$(git log \
+              --max-count=$MAX_COMMITS \
+              --pretty=format:"- [`%h`]($UPSTREAM_REPO/commit/%H) %s - %an")
+          else
+            TOTAL=$(git rev-list --count "${OLD_SHA}..${NEW_SHA}")
+            
+            LOG=$(git log \
+              "${OLD_SHA}..${NEW_SHA}" \
+              --max-count=$MAX_COMMITS \
+              --pretty=format:"- [`%h`]($UPSTREAM_REPO/commit/%H) %s - %an")
+          fi
+
+          if [ "$TOTAL" -gt "$MAX_COMMITS" ]; then
+            OMITTED=$((TOTAL - MAX_COMMITS))
+            LOG="${LOG}"$'\n'"- ...and ${OMITTED} more."
+          fi
+
+          {
+            echo 'log<<EOF'
+            echo "$LOG"
+            echo EOF
+          } >> "$GITHUB_COUTPUT"
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > release_notes.txt << EOF
+          Automated Upstream Build
+
+          ## Changes
+
+          ${{ steps.changelog.outputs.logs }}
+
+          ## Metadata
+
+          UPSTREAM_SHA=${{ steps.upstream.outputs.sha }}
+          EOF
+
+          gh release create "${{ steps.version.outputs.next }}" \
+            "${{ steps.artifact.outputs.file }}" \
+            --title "Build ${{ steps.version.outputs.next }}" \n
+            --notes-file release_notes.txt
