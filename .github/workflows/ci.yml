@@ -59,7 +59,7 @@ jobs:
         run: chmod +x gradlew
       - name: Build Jar
         working-directory: upstream
-        run: ./gradlew build -x test
+        run: ./gradlew shadowJar -x test
       - name: Find build artifacts
         id: artifact
         run: |
