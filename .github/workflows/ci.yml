@@ -65,7 +65,7 @@ jobs:
         run: |
           FILE=$(find upstream/plugin/build/libs \
             -maxdepth 1 \
-            -type f \n
+            -type f \
             \( -name "*.jar" -o -name "*.war" \) \
             ! -name "*-sources.jar" \
             ! -name "*-javadoc.jar" \
