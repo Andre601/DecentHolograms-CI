@@ -90,8 +90,19 @@ jobs:
       - name: Determine next build number
         if: steps.check.outputs.continue == 'true'
         id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
         run: |
-          LAST=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "")
+          set -eo pipefail
+
+          LAST=$(gh release list \
+            --json tagName \
+            -q '.[].tagName' \
+            2>/dev/null \
+            | grep -E '^[0-9]+$' \
+            | sort -n \
+            | tail -n 1)
 
           if [[ -z "$LAST" ]]; then
             NEXT=1
@@ -101,7 +112,8 @@ jobs:
 
           echo "next=$NEXT" >> $GITHUB_OUTPUT
 
-          echo "Next Build Number: $NEXT"
+          echo "Previous build number: ${LAST:-none}"
+          echo "Next build number: $NEXT"
       - name: Generate Changelog
         if: steps.check.outputs.continue == 'true'
         id: changelog
