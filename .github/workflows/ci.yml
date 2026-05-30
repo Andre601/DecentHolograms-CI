@@ -34,6 +34,7 @@ jobs:
         id: previous
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LAST_UPSTREAM_SHA: ${{ vars.LAST_UPSTREAM_SHA }}
         run: |
           LAST_SHA=$(gh variable get LAST_UPSTREAM_SHA 2>/dev/null || true)
 
