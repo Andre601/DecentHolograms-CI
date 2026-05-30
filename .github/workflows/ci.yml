@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 env:
   UPSTREAM_REPO: https://github.com/DecentSoftware-eu/DecentHolograms
@@ -32,15 +31,11 @@ jobs:
           echo "Latest Upstream SHA: $SHA"
       - name: Get previous Upstream SHA
         id: previous
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LAST_UPSTREAM_SHA: ${{ vars.LAST_UPSTREAM_SHA }}
         run: |
-          LAST_SHA=$(gh variable get LAST_UPSTREAM_SHA 2>/dev/null || true)
-
+          LAST_SHA=$(cat .last_upstream_sha 2>/dev/null || true)
           echo "last_sha=$LAST_SHA" >> "$GITHUB_OUTPUT"
 
-          echo "Last Build SHA: ${LAST_SHA:-none}"
+          echo "Previous SHA: ${LAST_SHA:-none}"
       - name: Stop if nothing changed
         id: check
         run: |
@@ -173,7 +168,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh variable set LAST_UPSTREAM_SHA \
-            --body "${{ steps.upstream.outputs.sha }}"
+          echo "${{ steps.upstream.outputs.sha }}" > .last_upstream_sha
 
-          echo "New stored SHA: ${{ steps.upstream.outputs.sha }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add .last_upstream_sha
+          git commit -m "Update upstream SHA file" || exit 0
+          git push
