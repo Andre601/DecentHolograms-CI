@@ -30,14 +30,14 @@ jobs:
           echo "sha=$SHA" >> $GITHUB_OUTPUT
 
           echo "Latest Upstream SHA: $SHA"
-      - name: Get latest SHA from latest CI release
+      - name: Get previous Upstream SHA
         id: previous
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           LAST_SHA=$(gh variable get LAST_UPSTREAM_SHA 2>/dev/null || true)
 
-          echo "last_upstream_sha=$LAST_SHA" >> "$GITHUB_OUTPUT"
+          echo "last_sha=$LAST_SHA" >> "$GITHUB_OUTPUT"
 
           echo "Last Build SHA: ${LAST_SHA:-none}"
       - name: Stop if nothing changed
