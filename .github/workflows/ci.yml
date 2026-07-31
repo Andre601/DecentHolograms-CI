@@ -14,8 +14,12 @@ env:
   MAX_COMMITS: 10
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
+    outputs:
+      continue: ${{ steps.check.outputs.continue }}
+      sha: ${{ steps.upstream.outputs.sha }}
+      last_sha: ${{ steps.previous.outputs.last_sha }}
     steps:
       - name: Checkout CI Repo
         uses: actions/checkout@v6
@@ -45,25 +49,25 @@ jobs:
           else
             echo "continue=true" >> $GITHUB_OUTPUT
           fi
+  build:
+    runs-on: ubuntu-latest
+    needs: check
+    if: ${{ needs.check.outputs.continue }} == "true"
+    steps:
       - name: Clone upstream repository
-        if: steps.check.outputs.continue == 'true'
         run: git clone --branch "$BRANCH" "$UPSTREAM_REPO" upstream
       - name: Setup Java
-        if: steps.check.outputs.continue == 'true'
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: 21
       - name: Make Gradle exectuable
-        if: steps.check.outputs.continue == 'true'
         working-directory: upstream
         run: chmod +x gradlew
       - name: Build Jar
-        if: steps.check.outputs.continue == 'true'
         working-directory: upstream
         run: ./gradlew shadowJar -x test
       - name: Find build artifacts
-        if: steps.check.outputs.continue == 'true'
         id: artifact
         run: |
           FILE=$(find upstream/plugin/build/libs \
@@ -83,42 +87,26 @@ jobs:
 
           echo "Build Artifact: $FILE"
       - name: Determine next build number
-        if: steps.check.outputs.continue == 'true'
         id: version
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          set -eo pipefail
+          LAST=$(cat .last_build_number 2>/dev/null || echo 0)
+          NEXT=$((LAST + 1))
 
-          LAST=$(gh release list \
-            --json tagName \
-            -q '.[].tagName' \
-            2>/dev/null \
-            | grep -E '^[0-9]+$' \
-            | sort -n \
-            | tail -n 1)
-
-          if [[ -z "$LAST" ]]; then
-            NEXT=1
-          else
-            NEXT=$((LAST + 1))
-          fi
-
-          echo "next=$NEXT" >> $GITHUB_OUTPUT
+          echo "last=$LAST" >> "$GITHUB_OUTPUT"
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
 
           echo "Previous build number: ${LAST:-none}"
           echo "Next build number: $NEXT"
       - name: Generate Changelog
-        if: steps.check.outputs.continue == 'true'
         id: changelog
         shell: bash
         working-directory: upstream
         run: |
           set -eo pipefail
           
-          OLD_SHA="${{ steps.previous.outputs.last_sha }}"
-          NEW_SHA="${{ steps.upstream.outputs.sha }}"
+          OLD_SHA="${{ needs.check.outputs.last_sha }}"
+          NEW_SHA="${{ needs.check.outputs.sha }}"
 
           if [[ -z "$OLD_SHA" ]]; then
             echo "First build!"
@@ -163,16 +151,17 @@ jobs:
             "${{ steps.artifact.outputs.file }}" \
             --title "Build ${{ steps.version.outputs.next }}" \
             --notes-file release_notes.txt
-      - name: "Update stored Upstream SHA"
+      - name: "Update Upstream SHA and last build number"
         if: steps.check.outputs.continue == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "${{ steps.upstream.outputs.sha }}" > .last_upstream_sha
+          echo "${{ steps.version.outputs.next }}" > .last_build_number
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add .last_upstream_sha
-          git commit -m "Update upstream SHA file" || exit 0
+          git add .last_upstream_sha .last_build_number
+          git commit -m "Update upstream SHA and last build number file" || exit 0
           git push
